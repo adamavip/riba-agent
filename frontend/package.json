@@ -9,9 +9,16 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@chat-adapter/slack": "^4.26.0",
+    "@chat-adapter/state-redis": "^4.26.0",
+    "@chat-adapter/telegram": "^4.26.0",
+    "@chat-adapter/whatsapp": "^4.26.0",
+    "ai": "^6.0.168",
     "next": "16.2.4",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tunnelmole": "^2.4.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
