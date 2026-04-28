@@ -28,12 +28,10 @@ bot.onNewMention(async (thread) => {
 bot.onDirectMessage(async (thread, message) => {
   await thread.startTyping();
 
-  const history = await thread.allMessages; // or however chat SDK exposes it
-
-  const result = await agent.generate({
+  const result = await agent.stream({
     prompt: message.text,
     //messages: history, // ← pass prior turns
   });
 
-  await thread.post(result.text);
+  await thread.post(result.fullStream);
 });
