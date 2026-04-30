@@ -1,22 +1,26 @@
 import { tool } from "ai";
 import { z } from "zod";
+import axios from "axios";
 
 export const tools = {
-  getWeather: tool({
-    description: "Get the current weather for a location",
+  getExpectedYield: tool({
+    description: "Get the expected maize yield based on N, P, and K rates",
     inputSchema: z.object({
-      location: z.string().describe("City name, e.g. San Francisco"),
+      N: z.number().describe("The nitrogen rate in kg/ha"),
+      P: z.number().describe("The phosphorus rate in kg/ha"),
+      K: z.number().describe("The potassium rate in kg/ha"),
     }),
-    execute: async ({ location }) => {
-      // Replace with a real weather API call
-      const response = await fetch(
-        `https://api.weatherapi.com/v1/current.json?key=${process.env.WEATHER_API_KEY}&q=${encodeURIComponent(location)}`,
-      );
-      const data = await response.json();
+    execute: async ({ N, P, K }) => {
+      /* const response = await axios({
+        method: "POST",
+        url: `${process.env.BACKEND_URL}/predict`,
+        data: { N, P, K },
+      }) */
+
+      const yieldData = N * 0.5 + P * 0.3 + K * 0.2; // Placeholder calculation, replace with actual API response
+
       return {
-        location,
-        temperature: data.current.temp_f,
-        condition: data.current.condition.text,
+        expectedYield: yieldData,
       };
     },
   }),
