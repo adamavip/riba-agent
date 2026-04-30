@@ -4,6 +4,7 @@ import { createRedisState } from "@chat-adapter/state-redis";
 import { ToolLoopAgent } from "ai";
 import { tools as tls } from "./tools";
 import { npkTool } from "./agents";
+import { emoji } from "chat";
 
 const agent = new ToolLoopAgent({
   model: "anthropic/claude-sonnet-4.6",
@@ -36,4 +37,11 @@ bot.onDirectMessage(async (thread, message) => {
 
 bot.onNewMessage(/^help$/i, async (thread, message) => {
   await thread.post(`Here's how I can help...: ${message.metadata}`);
+});
+
+// Filter to specific emoji
+bot.onReaction([emoji.thumbs_up, emoji.heart], async (event) => {
+  if (event.added) {
+    await event.thread.post(`Thanks for the ${event.emoji}!`);
+  }
 });
