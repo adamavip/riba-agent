@@ -37,3 +37,9 @@ bot.onDirectMessage(async (thread, message) => {
 
   await thread.post(result.fullStream);
 });
+
+bot.onReaction(async (event) => {
+  await event.thread.post(
+    `user: ${event.user} You reacted with ${event.emoji}`,
+  );
+});
