@@ -23,10 +23,6 @@ export const bot = new Chat({
   state: createRedisState(),
 });
 
-bot.onNewMention(async (thread) => {
-  await thread.post("Hello from WhatsApp!");
-});
-
 bot.onDirectMessage(async (thread, message) => {
   await thread.startTyping();
 
@@ -38,8 +34,6 @@ bot.onDirectMessage(async (thread, message) => {
   await thread.post(result.fullStream);
 });
 
-bot.onReaction(async (event) => {
-  await event.thread.post(
-    `user: ${event.user} You reacted with ${event.emoji}`,
-  );
+bot.onNewMessage(/^help$/i, async (thread, message) => {
+  await thread.post(`Here's how I can help...: ${message.metadata}`);
 });
