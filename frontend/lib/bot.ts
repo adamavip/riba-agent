@@ -5,6 +5,112 @@ import { ToolLoopAgent } from "ai";
 import { tools as tls } from "./tools";
 import { npkTool } from "./agents";
 import { emoji } from "chat";
+import { requireBaileysAdapter } from "chat-adapter-baileys";
+
+type WhatsAppLocation = {
+  address?: string;
+  latitude: number;
+  longitude: number;
+  name?: string;
+  url?: string;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function asFiniteNumber(value: unknown): number | null {
+  const numberValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function asOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function normalizeLocationPayload(
+  location: Record<string, unknown> | null,
+  latitudeKeys: string[],
+  longitudeKeys: string[],
+): WhatsAppLocation | null {
+  if (!location) {
+    return null;
+  }
+
+  const latitude = latitudeKeys
+    .map((key) => asFiniteNumber(location[key]))
+    .find((value) => value !== null);
+  const longitude = longitudeKeys
+    .map((key) => asFiniteNumber(location[key]))
+    .find((value) => value !== null);
+
+  if (latitude === undefined || longitude === undefined) {
+    return null;
+  }
+
+  return {
+    address: asOptionalString(location.address),
+    latitude,
+    longitude,
+    name: asOptionalString(location.name),
+    url: asOptionalString(location.url),
+  };
+}
+
+function getWhatsAppLocation(raw: unknown): WhatsAppLocation | null {
+  const rawMessage = asRecord(asRecord(raw)?.message);
+
+  const cloudApiLocation = normalizeLocationPayload(
+    asRecord(rawMessage?.location),
+    ["latitude"],
+    ["longitude"],
+  );
+
+  if (cloudApiLocation) {
+    return cloudApiLocation;
+  }
+
+  return normalizeLocationPayload(
+    asRecord(rawMessage?.locationMessage) ??
+      asRecord(rawMessage?.liveLocationMessage),
+    ["degreesLatitude", "latitude"],
+    ["degreesLongitude", "longitude"],
+  );
+}
+
+function buildPromptWithWhatsAppLocation(message: {
+  raw: unknown;
+  text: string;
+}) {
+  const location = getWhatsAppLocation(message.raw);
+
+  if (!location) {
+    return message.text;
+  }
+
+  const locationDetails = [
+    `latitude: ${location.latitude}`,
+    `longitude: ${location.longitude}`,
+    location.name ? `name: ${location.name}` : null,
+    location.address ? `address: ${location.address}` : null,
+    location.url ? `url: ${location.url}` : null,
+  ].filter(Boolean);
+
+  return [
+    message.text,
+    "",
+    "WhatsApp shared location:",
+    locationDetails.join("\n"),
+  ].join("\n");
+}
 
 const agent = new ToolLoopAgent({
   model: "anthropic/claude-sonnet-4.6",
@@ -27,21 +133,12 @@ export const bot = new Chat({
 bot.onDirectMessage(async (thread, message) => {
   await thread.startTyping();
 
+  //const wa = requireBaileysAdapter(thread);
+
   const result = await agent.stream({
-    prompt: message.text,
+    prompt: buildPromptWithWhatsAppLocation(message),
     //messages: history, // ← pass prior turns
   });
 
   await thread.post(result.fullStream);
-});
-
-bot.onNewMessage(/^help$/i, async (thread, message) => {
-  await thread.post(`Here's how I can help...: ${message.metadata}`);
-});
-
-// Filter to specific emoji
-bot.onReaction([emoji.thumbs_up, emoji.heart], async (event) => {
-  if (event.added) {
-    await event.thread.post(`Thanks for the ${event.emoji}!`);
-  }
 });
