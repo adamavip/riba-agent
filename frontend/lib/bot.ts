@@ -135,10 +135,10 @@ bot.onDirectMessage(async (thread, message) => {
 
   //const wa = requireBaileysAdapter(thread);
 
-  const result = await agent.stream({
+  /* const result = await agent.stream({
     prompt: buildPromptWithWhatsAppLocation(message),
     //messages: history, // ← pass prior turns
-  });
+  }); */
 
-  await thread.post(result.fullStream);
+  await thread.post(buildPromptWithWhatsAppLocation(message));
 });
