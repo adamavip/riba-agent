@@ -86,30 +86,16 @@ function getWhatsAppLocation(raw: unknown): WhatsAppLocation | null {
   );
 }
 
-function buildPromptWithWhatsAppLocation(message: {
-  raw: unknown;
-  text: string;
-}) {
-  const location = getWhatsAppLocation(message.raw);
-
-  if (!location) {
-    return message.text;
-  }
-
+function formatWhatsAppLocationReply(location: WhatsAppLocation): string {
   const locationDetails = [
-    `latitude: ${location.latitude}`,
-    `longitude: ${location.longitude}`,
-    location.name ? `name: ${location.name}` : null,
-    location.address ? `address: ${location.address}` : null,
-    location.url ? `url: ${location.url}` : null,
+    `Latitude: ${location.latitude}`,
+    `Longitude: ${location.longitude}`,
+    location.name ? `Name: ${location.name}` : null,
+    location.address ? `Address: ${location.address}` : null,
+    location.url ? `URL: ${location.url}` : null,
   ].filter(Boolean);
 
-  return [
-    message.text,
-    "",
-    "WhatsApp shared location:",
-    locationDetails.join("\n"),
-  ].join("\n");
+  return locationDetails.join("\n");
 }
 
 const agent = new ToolLoopAgent({
@@ -136,9 +122,15 @@ bot.onDirectMessage(async (thread, message) => {
   //const wa = requireBaileysAdapter(thread);
 
   /* const result = await agent.stream({
-    prompt: buildPromptWithWhatsAppLocation(message),
+    prompt: message.text,
     //messages: history, // ← pass prior turns
   }); */
 
-  await thread.post(buildPromptWithWhatsAppLocation(message));
+  const location = getWhatsAppLocation(message.raw);
+
+  await thread.post(
+    location
+      ? formatWhatsAppLocationReply(location)
+      : "No WhatsApp location found in this message.",
+  );
 });
