@@ -15,6 +15,12 @@ type WhatsAppLocation = {
   url?: string;
 };
 
+type IncomingMessage = {
+  attachments?: Array<{ url?: string }>;
+  raw: unknown;
+  text: string;
+};
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
@@ -65,8 +71,9 @@ function normalizeLocationPayload(
   };
 }
 
-function getWhatsAppLocation(raw: unknown): WhatsAppLocation | null {
-  const rawMessage = asRecord(asRecord(raw)?.message);
+function getWhatsAppLocationFromRaw(raw: unknown): WhatsAppLocation | null {
+  const rawRecord = asRecord(raw);
+  const rawMessage = asRecord(rawRecord?.message) ?? rawRecord;
 
   const cloudApiLocation = normalizeLocationPayload(
     asRecord(rawMessage?.location),
@@ -83,6 +90,48 @@ function getWhatsAppLocation(raw: unknown): WhatsAppLocation | null {
       asRecord(rawMessage?.liveLocationMessage),
     ["degreesLatitude", "latitude"],
     ["degreesLongitude", "longitude"],
+  );
+}
+
+function getWhatsAppLocationFromText(text: string): WhatsAppLocation | null {
+  const coordinateMatch = text.match(
+    /(?:location:\s*)?(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i,
+  );
+
+  if (!coordinateMatch) {
+    return null;
+  }
+
+  return normalizeLocationPayload(
+    {
+      latitude: coordinateMatch[1],
+      longitude: coordinateMatch[2],
+    },
+    ["latitude"],
+    ["longitude"],
+  );
+}
+
+function getWhatsAppLocationFromAttachments(
+  attachments: IncomingMessage["attachments"],
+): WhatsAppLocation | null {
+  const mapUrl = attachments
+    ?.map((attachment) => attachment.url)
+    .find((url) => url?.includes("maps") && url.includes("q="));
+
+  if (!mapUrl) {
+    return null;
+  }
+
+  const query = new URL(mapUrl).searchParams.get("q");
+  return query ? getWhatsAppLocationFromText(query) : null;
+}
+
+function getWhatsAppLocation(message: IncomingMessage): WhatsAppLocation | null {
+  return (
+    getWhatsAppLocationFromRaw(message.raw) ??
+    getWhatsAppLocationFromText(message.text) ??
+    getWhatsAppLocationFromAttachments(message.attachments)
   );
 }
 
@@ -126,7 +175,7 @@ bot.onDirectMessage(async (thread, message) => {
     //messages: history, // ← pass prior turns
   }); */
 
-  const location = getWhatsAppLocation(message.raw);
+  const location = getWhatsAppLocation(message);
 
   await thread.post(
     location
