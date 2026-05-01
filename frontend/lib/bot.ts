@@ -1,4 +1,5 @@
-import { Chat } from "chat";
+import { Actions, Button, Card, CardText, Chat } from "chat";
+import type { Thread } from "chat";
 import { createWhatsAppAdapter } from "@chat-adapter/whatsapp";
 import { createRedisState } from "@chat-adapter/state-redis";
 import { ToolLoopAgent } from "ai";
@@ -19,6 +20,15 @@ type IncomingMessage = {
   attachments?: Array<{ url?: string }>;
   raw: unknown;
   text: string;
+};
+
+type ThreadLocationState = {
+  location?: WhatsAppLocation;
+};
+
+type WhatsAppThreadId = {
+  phoneNumberId: string;
+  userWaId: string;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -147,6 +157,81 @@ function formatWhatsAppLocationReply(location: WhatsAppLocation): string {
   return locationDetails.join("\n");
 }
 
+const shareLocationRequest =
+  "Please share your position before we continue. In WhatsApp, tap attach > Location > Send your current location.";
+
+function decodeWhatsAppThreadId(threadId: string): WhatsAppThreadId {
+  const [adapterName, phoneNumberId, userWaId] = threadId.split(":");
+
+  if (adapterName !== "whatsapp" || !phoneNumberId || !userWaId) {
+    throw new Error(`Invalid WhatsApp thread ID: ${threadId}`);
+  }
+
+  return { phoneNumberId, userWaId };
+}
+
+async function sendWhatsAppLocationRequest(threadId: string) {
+  const { phoneNumberId, userWaId } = decodeWhatsAppThreadId(threadId);
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+
+  if (!accessToken) {
+    throw new Error("WHATSAPP_ACCESS_TOKEN is required.");
+  }
+
+  const apiVersion = process.env.WHATSAPP_API_VERSION ?? "v21.0";
+  const response = await fetch(
+    `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: userWaId,
+        type: "interactive",
+        interactive: {
+          type: "location_request_message",
+          body: {
+            text: "Please share your current position.",
+          },
+          action: {
+            name: "send_location",
+          },
+        },
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `WhatsApp location request failed: ${response.status} ${await response.text()}`,
+    );
+  }
+}
+
+async function askForLocation(thread: Thread<ThreadLocationState>) {
+  await thread.post(
+    Card({
+      title: "Share Position",
+      children: [
+        CardText(
+          "Please share your current position before we continue.",
+        ),
+        Actions([
+          Button({
+            id: "share_position",
+            label: "Share position",
+            style: "primary",
+          }),
+        ]),
+      ],
+    }),
+  );
+}
+
 const agent = new ToolLoopAgent({
   model: "anthropic/claude-sonnet-4.6",
   instructions:
@@ -165,6 +250,14 @@ export const bot = new Chat({
   state: createRedisState(),
 });
 
+bot.onAction("share_position", async (event) => {
+  try {
+    await sendWhatsAppLocationRequest(event.threadId);
+  } catch {
+    await event.thread?.post(shareLocationRequest);
+  }
+});
+
 bot.onDirectMessage(async (thread, message) => {
   await thread.startTyping();
 
@@ -176,10 +269,25 @@ bot.onDirectMessage(async (thread, message) => {
   }); */
 
   const location = getWhatsAppLocation(message);
+  const state = (await thread.state) as ThreadLocationState | null;
 
-  await thread.post(
-    location
-      ? formatWhatsAppLocationReply(location)
-      : "No WhatsApp location found in this message.",
-  );
+  if (location) {
+    await thread.setState({ location });
+    await thread.post(
+      ["Position recorded:", formatWhatsAppLocationReply(location)].join("\n"),
+    );
+    return;
+  }
+
+  if (!state?.location) {
+    await askForLocation(thread);
+    return;
+  }
+
+  const result = await agent.stream({
+    prompt: message.text,
+    //messages: history, // pass prior turns
+  });
+
+  await thread.post(result.fullStream);
 });
