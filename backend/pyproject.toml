@@ -7,6 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "ee>=0.2",
     "flask>=3.1.3",
+    "gunicorn>=25.3.0",
     "ipython>=8.39.0",
     "joblib>=1.5.3",
     "numpy>=2.2.6",
