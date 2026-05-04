@@ -136,7 +136,9 @@ function getWhatsAppLocationFromAttachments(
   return query ? getWhatsAppLocationFromText(query) : null;
 }
 
-function getWhatsAppLocation(message: IncomingMessage): WhatsAppLocation | null {
+function getWhatsAppLocation(
+  message: IncomingMessage,
+): WhatsAppLocation | null {
   return (
     getWhatsAppLocationFromRaw(message.raw) ??
     getWhatsAppLocationFromText(message.text) ??
@@ -182,10 +184,10 @@ function formatYieldPredictionReply(
     `ECEC: ${soil.ecec.toFixed(2)}`,
     "",
     "Climate predictors",
-    `Rain 2024: ${climate.rain_2024.toFixed(2)}`,
-    `Rain CV 2024: ${climate.raincv_2024.toFixed(2)}`,
+    `Rain: ${climate.rain_2024.toFixed(2)}`,
+    `Rain CV: ${climate.raincv_2024.toFixed(2)}`,
     "",
-    "This is a model-based estimate. Profitability also depends on maize price, fertilizer prices, labor, transport, seed, planting date, and weed control.",
+    "This is a model-based estimate.",
   ].join("\n");
 }
 
@@ -249,9 +251,7 @@ async function askForLocation(thread: Thread<ThreadLocationState>) {
     Card({
       title: "📍 Share Position",
       children: [
-        CardText(
-          "📌 Please share your current position before we continue.",
-        ),
+        CardText("📌 Please share your current position before we continue."),
         Actions([
           Button({
             id: "share_position",
