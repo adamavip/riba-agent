@@ -40,4 +40,7 @@
 *.pem
 
 # Backend
-/backend/
+/backend/.venv/
+/backend/.uv-cache/
+/backend/__pycache__/
+/backend/SSA_maize_yield_response/predictor_stack_all_years.tif
