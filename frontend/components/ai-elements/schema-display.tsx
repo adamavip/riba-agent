@@ -96,9 +96,10 @@ export const SchemaDisplayPath = ({
   ...props
 }: SchemaDisplayPathProps) => {
   const { path } = useContext(SchemaDisplayContext);
+  const pathHtml = typeof children === "string" ? children : path;
 
   // Highlight path parameters
-  const highlightedPath = path.replaceAll(
+  const highlightedPath = pathHtml.replaceAll(
     /\{([^}]+)\}/g,
     '<span class="text-blue-600 dark:text-blue-400">{$1}</span>'
   );
@@ -107,7 +108,7 @@ export const SchemaDisplayPath = ({
     <span
       className={cn("font-mono text-sm", className)}
       // oxlint-disable-next-line eslint-plugin-react(no-danger)
-      dangerouslySetInnerHTML={{ __html: children ?? highlightedPath }}
+      dangerouslySetInnerHTML={{ __html: highlightedPath }}
       {...props}
     />
   );
