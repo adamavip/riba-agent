@@ -215,15 +215,15 @@ async function sendWhatsAppLocationRequest(threadId: string) {
 async function askForLocation(thread: Thread<ThreadLocationState>) {
   await thread.post(
     Card({
-      title: "Share Position",
+      title: "📍 Share Position",
       children: [
         CardText(
-          "Please share your current position before we continue.",
+          "📌 Please share your current position before we continue.",
         ),
         Actions([
           Button({
             id: "share_position",
-            label: "Share position",
+            label: "📍 Share",
             style: "primary",
           }),
         ]),
