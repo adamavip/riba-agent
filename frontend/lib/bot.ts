@@ -3,10 +3,9 @@ import type { Thread } from "chat";
 import { createWhatsAppAdapter } from "@chat-adapter/whatsapp";
 import { createRedisState } from "@chat-adapter/state-redis";
 import { ToolLoopAgent } from "ai";
-import { tools as tls } from "./tools";
-import { npkTool } from "./agents";
-import { emoji } from "chat";
-import { requireBaileysAdapter } from "chat-adapter-baileys";
+import { getExpectedYield } from "./tools";
+import { extractNPKRates, npkTool } from "./agents";
+import { isYieldEstimationRequest } from "./yield-intent";
 
 type WhatsAppLocation = {
   address?: string;
@@ -157,6 +156,39 @@ function formatWhatsAppLocationReply(location: WhatsAppLocation): string {
   return locationDetails.join("\n");
 }
 
+function formatYieldPredictionReply(
+  prediction: Awaited<ReturnType<typeof getExpectedYield>>,
+): string {
+  const { fertilizerRates, predictorSummary } = prediction;
+  const { soil, climate } = predictorSummary;
+
+  return [
+    `Predicted maize yield: ${prediction.expectedYield.toFixed(2)} t/ha`,
+    "",
+    "Field position",
+    `Latitude: ${prediction.latitude.toFixed(5)}`,
+    `Longitude: ${prediction.longitude.toFixed(5)}`,
+    "",
+    "Fertilizer scenario",
+    `N: ${fertilizerRates.N} kg/ha`,
+    `P: ${fertilizerRates.P} kg/ha`,
+    `K: ${fertilizerRates.K} kg/ha`,
+    "",
+    "Soil predictors",
+    `OC: ${soil.oc.toFixed(2)}`,
+    `pH: ${soil.pH.toFixed(2)}`,
+    `Sand: ${soil.sand.toFixed(2)}`,
+    `Clay: ${soil.clay.toFixed(2)}`,
+    `ECEC: ${soil.ecec.toFixed(2)}`,
+    "",
+    "Climate predictors",
+    `Rain 2024: ${climate.rain_2024.toFixed(2)}`,
+    `Rain CV 2024: ${climate.raincv_2024.toFixed(2)}`,
+    "",
+    "This is a model-based estimate. Profitability also depends on maize price, fertilizer prices, labor, transport, seed, planting date, and weed control.",
+  ].join("\n");
+}
+
 const shareLocationRequest =
   "Please share your position before we continue. In WhatsApp, tap attach > Location > Send your current location.";
 
@@ -239,7 +271,7 @@ const agent = new ToolLoopAgent({
     "You are a helpful  AI yield predictor based on N, P, and K rates in chat conversations. " +
     "Answer questions clearly and use your tools when you need " +
     "Keep responses concise and well-formatted for chat.",
-  tools: { npkTool, ...tls },
+  tools: { npkTool },
 });
 
 export const bot = new Chat({
@@ -281,6 +313,39 @@ bot.onDirectMessage(async (thread, message) => {
 
   if (!state?.location) {
     await askForLocation(thread);
+    return;
+  }
+
+  if (isYieldEstimationRequest(message.text)) {
+    let rates: { N: number; P: number; K: number };
+
+    try {
+      rates = await extractNPKRates(message.text);
+    } catch {
+      await thread.post(
+        "Please include the N, P, and K fertilizer rates in kg/ha so I can estimate yield. Example: estimate yield for N 100, P 40, K 20.",
+      );
+      return;
+    }
+
+    try {
+      const prediction = await getExpectedYield({
+        latitude: state.location.latitude,
+        longitude: state.location.longitude,
+        ...rates,
+      });
+
+      await thread.post(formatYieldPredictionReply(prediction));
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "The backend prediction service did not return a yield estimate.";
+
+      await thread.post(
+        `I could not estimate yield from the backend right now.\n\n${message}`,
+      );
+    }
     return;
   }
 
